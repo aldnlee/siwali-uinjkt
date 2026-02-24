@@ -1,0 +1,18 @@
+# Folder environment
+.venv/
+venv/
+__pycache__/
+
+# File sensitif
+.env
+credentials.json
+ngrok.exe
+
+# File hasil test & temporary (sampah)
+last_audit_report.csv
+last_test_summary.csv
+report_chart.png
+stress_test_*
+test_result_*
+temp_*
+hasil_evaluasi_ragas.csv

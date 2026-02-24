@@ -1,0 +1,8 @@
+Target: Umum
+Kategori: Akademik
+Sub_Kategori: Informasi Umum
+Deskripsi: Jumlah Program Magister (S2)
+Nilai: 25
+Satuan: Program
+Tanggal_Update: 2/20/2026
+Sumber: Website Resmi UIN Jakarta

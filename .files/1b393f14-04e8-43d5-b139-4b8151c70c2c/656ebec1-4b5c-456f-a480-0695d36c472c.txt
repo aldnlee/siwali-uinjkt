@@ -1,0 +1,8 @@
+Target: Umum
+Kategori: Keuangan
+Sub_Kategori: Tarif Magister (S2)
+Jenis_Layanan: Manajemen Pendidikan Islam
+Satuan: Per Mahasiswa/Semester
+Tarif_WNI: 8037500
+Tarif_WNA: 9515000
+Keterangan: FITK

@@ -1,0 +1,8 @@
+Target: Umum
+Kategori: Keuangan
+Sub_Kategori: Tarif Magister (S2)
+Jenis_Layanan: Komunikasi dan Penyiaran Islam
+Satuan: Per Mahasiswa/Semester
+Tarif_WNI: 8600000
+Tarif_WNA: 10100000
+Keterangan: FDIK

@@ -1,0 +1,8 @@
+Target: Umum
+Kategori: Keuangan
+Sub_Kategori: Tarif Magister (S2)
+Jenis_Layanan: Ilmu Al-Qur'an dan Tafsir
+Satuan: Per Mahasiswa/Semester
+Tarif_WNI: 7062500
+Tarif_WNA: 10125000
+Keterangan: FU

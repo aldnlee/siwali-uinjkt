@@ -1,0 +1,19 @@
+# UI & Framework
+chainlit
+python-dotenv
+
+# LLM & Orchestration
+langchain
+langchain-groq
+langchain-community
+
+# Vector Database & Retrieval
+langchain-pinecone
+pypdf
+
+# Data Processing (Sangat krusial untuk kestabilan Chainlit)
+pandas>=2.0.0
+pyarrow>=12.0.0
+
+# Optional: Jika kamu masih butuh pencarian web luar
+langchain-tavily
