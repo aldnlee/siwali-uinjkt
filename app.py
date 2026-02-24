@@ -1,49 +1,158 @@
-import chainlit as cl
 import os
+import asyncio
+import time
+import pandas as pd
+import streamlit as st
+from datetime import datetime
+from langchain_core.documents import Document
+
+# Import Modul Internal
+from modules.database import get_vectorstore
 from modules.rag_engine import advanced_rag_chat
 
-@cl.on_chat_start
-async def start():
-    """Berjalan saat user pertama kali membuka chat."""
-    cl.user_session.set("chat_history", [])
-    
-    # Pesan sambutan yang profesional sebagai Humas UIN
-    await cl.Message(
-        content="✨ **Selamat Datang di Humas AI UIN Jakarta**\n\nSaya siap membantu Anda mencari informasi mengenai UKT, program studi, dan info akademik lainnya. Silakan ajukan pertanyaan Anda!"
-    ).send()
+# Konfigurasi Path
+project_root = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(project_root, "data", "riwayat_upload.csv")
 
-@cl.on_message
-async def main(message: cl.Message):
-    """Berjalan setiap kali user mengirim pesan."""
-    chat_history = cl.user_session.get("chat_history")
+st.set_page_config(page_title="UIN JKT AI Center", page_icon="🎓", layout="wide")
+
+# =========================
+# SIDEBAR NAVIGATION
+# =========================
+with st.sidebar:
+    st.title("🎓 Llama JKT AI")
+    mode = st.radio("Menu:", ["💬 Chat Mahasiswa", "🛡️ Panel Admin"])
+    st.divider()
     
-    # 1. Tampilkan proses 'Thinking' dengan Step
-    async with cl.Step(name="Menganalisis Dokumen UIN...", type="run") as step:
-        # PENTING: Menangkap 3 nilai: answer, sources (boosted), debug_info
-        # Ini untuk memperbaiki error 'too many values to unpack' sebelumnya
-        answer, sources, debug = await advanced_rag_chat(message.content, chat_history)
+    if mode == "🛡️ Panel Admin":
+        # --- FITUR HAPUS TOTAL ---
+        st.subheader("☢️ Critical Actions")
+        st.warning("Gunakan fitur ini untuk membersihkan seluruh database cloud.")
+        confirm_reset = st.checkbox("Saya yakin ingin HAPUS TOTAL")
+        if st.button("⚠️ Reset Seluruh Pengetahuan"):
+            if confirm_reset:
+                with st.spinner("Membersihkan Cloud..."):
+                    try:
+                        get_vectorstore().delete(delete_all=True)
+                        if os.path.exists(LOG_FILE):
+                            os.remove(LOG_FILE)
+                        st.success("Database Pinecone berhasil dikosongkan!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Gagal Reset: {e}")
+            else:
+                st.error("Silakan centang konfirmasi terlebih dahulu.")
+
+# =========================
+# MODE CHAT MAHASISWA
+# =========================
+if mode == "💬 Chat Mahasiswa":
+    st.header("💬 Asisten Digital Mahasiswa")
+    if "messages" not in st.session_state: st.session_state.messages = []
+
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]): st.markdown(m["content"])
+
+    if prompt := st.chat_input("Tanyakan biaya kuliah atau prodi..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Llama sedang memproses..."):
+                # Menjalankan RAG Engine v15.2
+                ans, src, dbg = asyncio.run(advanced_rag_chat(prompt, st.session_state.messages, debug=True))
+                st.markdown(ans)
+                if dbg:
+                    with st.expander("🛠️ Debug Info"): st.json(dbg)
+
+        st.session_state.messages.append({"role": "assistant", "content": ans})
+
+# =========================
+# MODE ADMIN PANEL (UPDATED)
+# =========================
+else:
+    st.header("🛡️ Manajemen Pengetahuan")
+    tab_up, tab_log = st.tabs(["📤 Upload & Sync", "📋 Riwayat Log"])
+
+    with tab_up:
+        uploaded_file = st.file_uploader("Upload CSV Keuangan/Prodi (Gunakan format UPDATED)", type=["csv"])
         
-        # Tampilkan info singkat di dalam step untuk transparansi
-        intent = debug.get("intent", "UMUM")
-        model = debug.get("model", "Hybrid")
-        step.output = f"Intent: {intent} | Model: {model} | {len(sources)} dokumen relevan ditemukan."
+        if uploaded_file and st.button("🚀 Sync to Cloud"):
+            temp_path = f"temp_{uploaded_file.name}"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
 
-    # 2. Kirim jawaban akhir ke UI
-    # Jika sources ada, kita bisa melampirkan referensi dokumennya
-    elements = []
-    if sources:
-        # Menampilkan 3 sumber teratas sebagai Text Element di Chainlit
-        for i, doc in enumerate(sources[:3]):
-            content = doc['content'] if isinstance(doc, dict) else doc[0]
-            source_name = doc.get('source', 'Database') if isinstance(doc, dict) else "Sumber Terverifikasi"
-            
-            elements.append(
-                cl.Text(name=f"Sumber {i+1}", content=content, display="side")
-            )
+            with st.spinner("Sinkronisasi Metadata ke Pinecone..."):
+                try:
+                    # Membaca CSV dan memastikan tidak ada nilai NaN
+                    df = pd.read_csv(temp_path).fillna("")
+                    docs = []
+                    
+                    for i, row in df.iterrows():
+                        # 1. Konversi baris ke dictionary dengan kunci UPPERCASE
+                        raw_meta = {k.strip().upper(): str(v).strip() for k, v in row.to_dict().items()}
+                        
+                        # 2. Ambil JURUSAN_PROGRAM_STUDI dari kolom fisik (Hasil updated CSV sebelumnya)
+                        # Jika tidak ada, fallback ke "UMUM"
+                        prodi = raw_meta.get("JURUSAN_PROGRAM_STUDI", "UMUM")
+                        
+                        # 3. Bentuk Metadata yang akan dikirim ke Pinecone
+                        # Metadata ini harus sinkron dengan filter di advanced_rag_chat
+                        meta = {
+                            "SOURCE": uploaded_file.name,
+                            "JENJANG": raw_meta.get("JENJANG", "S1"),
+                            "KATEGORI": raw_meta.get("KATEGORI", "KEUANGAN"),
+                            "TIPE_DATA": raw_meta.get("TIPE_DATA", "BIAYA"),
+                            "JURUSAN_PROGRAM_STUDI": prodi,
+                            "UPLOADED_AT": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        
+                        # 4. Bentuk Content (Page Content)
+                        # Kita awali dengan "Prodi:" agar cocok dengan kueri literal di Stage 2 RAG
+                        content = f"Prodi: {prodi} | Jenjang: {meta['JENJANG']} | " + \
+                                  " | ".join([f"{k}: {v}" for k, v in raw_meta.items() if k not in ["TEXT"]])
+                        
+                        # Jika kolom 'TEXT' asli ada di CSV, prioritaskan sebagai konten utama
+                        if "TEXT" in raw_meta:
+                            content = raw_meta["TEXT"]
 
-    await cl.Message(content=answer, elements=elements).send()
+                        docs.append(Document(page_content=content, metadata=meta))
 
-    # 3. Update Chat History untuk konteks percakapan selanjutnya
-    chat_history.append({"role": "user", "content": message.content})
-    chat_history.append({"role": "assistant", "content": answer})
-    cl.user_session.set("chat_history", chat_history)
+                    if docs:
+                        vs = get_vectorstore()
+                        
+                        # 5. Menghapus data lama dengan sumber yang sama (Idempotent)
+                        try:
+                            vs.delete(filter={"SOURCE": uploaded_file.name})
+                        except:
+                            pass
+                        
+                        # 6. Upload dengan ID yang unik namun teratur
+                        custom_ids = [f"{uploaded_file.name}_{idx}" for idx in range(len(docs))]
+                        vs.add_documents(docs, ids=custom_ids)
+
+                        # Logging Riwayat
+                        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+                        log_entry = pd.DataFrame([{
+                            "Waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                            "File": uploaded_file.name, 
+                            "Status": "Success",
+                            "Data_Count": len(docs)
+                        }])
+                        log_entry.to_csv(LOG_FILE, mode='a', index=False, header=not os.path.exists(LOG_FILE))
+                        
+                        st.success(f"✅ Berhasil Sinkronisasi {len(docs)} data!")
+                        time.sleep(1)
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Gagal Sinkronisasi: {e}")
+                finally:
+                    if os.path.exists(temp_path): os.remove(temp_path)
+
+    with tab_log:
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
+            st.dataframe(pd.read_csv(LOG_FILE).sort_values("Waktu", ascending=False), use_container_width=True)
+        else:
+            st.info("Belum ada riwayat upload.")
