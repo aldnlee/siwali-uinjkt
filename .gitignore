@@ -7,6 +7,7 @@ __pycache__/
 .env
 credentials.json
 ngrok.exe
+.streamlit/secrets.toml
 
 # File hasil test & temporary (sampah)
 last_audit_report.csv

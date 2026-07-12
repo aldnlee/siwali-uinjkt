@@ -4,7 +4,7 @@ import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
 
-# 1. GUNAKAN FLEXIBLE METRICS (Menghindari Error InstructorLLM)
+# 1. Flexible Legacy Metrics
 from ragas.metrics import (
     faithfulness,
     answer_correctness,
@@ -15,7 +15,7 @@ from ragas.run_config import RunConfig
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# Import fungsi RAG utama Anda
+# Import fungsi RAG utama v45.2
 from modules.rag_engine import advanced_rag_chat 
 
 # 2. HACK GROQ API: Mencegah parameter 'n' masuk ke Groq (Penyebab Error 400)
@@ -37,30 +37,30 @@ class SafeChatGroq(ChatGroq):
         return await super().agenerate(messages, stop=stop, callbacks=callbacks, **kwargs)
 
 async def run_evaluation():
-    print("🚀 Memulai Evaluasi RAGAS (Compatibility Mode) untuk Chatbot UIN...")
+    print("🚀 Memulai Evaluasi RAGAS (SNBT 2026 Ground-Truth Sync) - SIWALI AI...")
 
-    # Kumpulan pertanyaan evaluasi yang telah disinkronisasi dengan Database Pinecone
+    # --- UPDATE: Kumpulan Pertanyaan Disinkronisasi dengan Data SNBT Nyata di Pinecone ---
     eval_data = [
-    {
-        "question": "Berapa ukt pendidikan fisika kelompok 3?",
-        "ground_truth": "UKT Pendidikan Fisika untuk kelompok 3 adalah Rp 4.000.000."
-    },
-    {
-        "question": "Berapa tarif S2 Pengkajian Islam untuk WNI?",
-        "ground_truth": "Tarif Magister (S2) Pengkajian Islam untuk mahasiswa WNI adalah Rp 8.750.000 per semester."
-    },
-    {
-        "question": "Berapa UKT Ilmu Hadits kelompok 2?",
-        "ground_truth": "Berdasarkan data Fakultas Ushuluddin, UKT Ilmu Hadits kelompok 2 adalah Rp 2.950.000."
-    },
-    {
-        "question": "Berapa UKT Hukum Pidana Islam kelompok 4?",
-        "ground_truth": "UKT Hukum Pidana Islam (Jinayah) di Fakultas Syariah dan Hukum untuk kelompok 4 adalah Rp 3.306.000."
-    },
-    {
-        "question": "Berapa biaya UKT kelompok 1 untuk Pendidikan Fisika?",
-        "ground_truth": "Biaya UKT kelompok 1 untuk Pendidikan Fisika adalah 0 - 400.000."
-    }
+        {
+            "question": "Berapa daya tampung resmi untuk S1 Teknik Informatika pada jalur SNBT?",
+            "ground_truth": "Daya tampung resmi untuk S1 Teknik Informatika pada jalur SNBT adalah 77 kursi."
+        },
+        {
+            "question": "Berapa kuota kursi yang disediakan untuk prodi Psikologi di jalur seleksi SNBT?",
+            "ground_truth": "Kuota kursi yang disediakan untuk program studi Psikologi pada jalur seleksi SNBT adalah 182 kursi."
+        },
+        {
+            "question": "Berapa daya tampung SNBT untuk program studi Sosiologi?",
+            "ground_truth": "Daya tampung SNBT untuk program studi Sosiologi adalah 100 kursi."
+        },
+        {
+            "question": "Mana yang lebih banyak daya tampung antara prodi Sistem Informasi atau prodi Sosiologi pada jalur SNBT?",
+            "ground_truth": "Daya tampung Sosiologi (100 kursi) lebih banyak daripada Sistem Informasi (92 kursi)."
+        },
+        {
+            "question": "Berapa kuota kursi untuk prodi Sosial Ekonomi Pertanian atau Agribisnis di jalur SNBT?",
+            "ground_truth": "Kuota kursi untuk prodi Sosial Ekonomi Pertanian/Agribisnis di jalur SNBT adalah 77 kursi."
+        }
     ]
 
     questions, answers, contexts, ground_truths = [], [], [], []
@@ -70,18 +70,21 @@ async def run_evaluation():
         q = item["question"]
         print(f"💬 Menjawab: {q}")
         
-        answer, docs = await advanced_rag_chat(q, [])
-        doc_texts = [d["content"] for d in docs]
+        # KUNCI PERBAIKAN: Sesuaikan dengan unpacking 3 return values dari v45.2
+        answer, boosted_docs, dbg_info = await advanced_rag_chat(q, [])
+        
+        # KUNCI PERBAIKAN: boosted_docs berisi tuple (page_content, score). Ambil elemen ke-0 [0]
+        doc_texts = [doc[0] for doc in boosted_docs[:5]] # Ambil top 5 dokumen saja untuk efisiensi token
         
         questions.append(q)
         answers.append(answer)
         contexts.append(doc_texts)
         ground_truths.append(item["ground_truth"])
         
-        # Jeda agar tidak kena Rate Limit Groq (TPM)
-        await asyncio.sleep(2)
+        # Jeda aman agar tidak terkena Rate Limit Groq (TPM/RPM)
+        await asyncio.sleep(3)
 
-    # Siapkan Dataset
+    # Siapkan Dataset untuk Ragas
     dataset = Dataset.from_dict({
         "question": questions,
         "answer": answers,
@@ -89,39 +92,47 @@ async def run_evaluation():
         "ground_truth": ground_truths
     })
 
-    # 3. KONFIGURASI JURI (Llama 8B)
-    # Kita tidak perlu bungkus dengan Wrapper Ragas karena kita pakai Legacy Metrics
+    # 3. KONFIGURASI JURI (Menggunakan Juri Tangguh Llama 3.3 70B agar reasoning audit akurat)
     juri_llm = SafeChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     juri_embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2") 
 
-    # Konfigurasi antrean agar tidak Timeout
+    # Konfigurasi pembatasan sekuensial agar tidak tabrakan kuota token
     safe_config = RunConfig(timeout=300, max_workers=1)
 
-    print("\n⏳ Menghitung skor RAGAS (Abaikan peringatan kuning)...")
+    print("\n⏳ Menghitung skor RAGAS via Groq API Cloud...")
     
-    # 4. EKSEKUSI EVALUASI (Gunakan lowercase metrics)
-    result = evaluate(
-        dataset=dataset,
-        metrics=[
-            faithfulness,
-            answer_correctness,
-            context_precision,
-            context_recall
-        ],
-        llm=juri_llm,
-        embeddings=juri_embeddings,
-        run_config=safe_config
-    )
-
-    print("\n📊 HASIL EVALUASI RAGAS:")
-    print(result)
-
-    # Simpan hasil
     try:
-        result.to_pandas().to_csv("hasil_evaluasi_ragas.csv", index=False)
-        print("✅ Hasil detail disimpan di hasil_evaluasi_ragas.csv")
+        # 4. EKSEKUSI EVALUASI
+        result = evaluate(
+            dataset=dataset,
+            metrics=[
+                faithfulness,
+                answer_correctness,
+                context_precision,
+                context_recall
+            ],
+            llm=juri_llm,
+            embeddings=juri_embeddings,
+            run_config=safe_config
+        )
+
+        print("\n📊 HASIL EVALUASI RAGAS (SIWALI ENGINE):")
+        print(result)
+
+        # Simpan hasil analisis ke file CSV lokal
+        df_result = result.to_pandas()
+        df_result.to_csv("hasil_evaluasi_ragas.csv", index=False)
+        print("✅ Hasil detail sukses disimpan di 'hasil_evaluasi_ragas.csv'")
+        
+        # Integrasi Sinkronisasi File untuk Dashboard Admin main.py
+        # Menyalin laporan agar tab 4 di Admin Panel langsung mendeteksi skor terbaru
+        df_audit_compat = df_result.reset_index().rename(columns={'index': 'No'})
+        df_audit_compat['Score'] = df_audit_compat['answer_correctness'] * 10 # Skala 1-10 untuk Chart Plotly
+        df_audit_compat.to_csv(os.path.join("data", "last_audit_report.csv"), index=False)
+        print("✅ Sinkronisasi Dashboard Admin 'data/last_audit_report.csv' berhasil diperbarui.")
+
     except Exception as e:
-        print(f"⚠️ Gagal menyimpan CSV: {e}")
+        print(f"❌ Proses Evaluasi RAGAS terhenti akibat kendala: {e}")
 
 if __name__ == "__main__":
     asyncio.run(run_evaluation())

@@ -1,0 +1,8 @@
+No,Category,Query,Faithfulness,Answer_Relevance,Context_Precision,Context_Recall,Overall_Score
+1,Factual,Sebutkan seluruh 11 jalur masuk jenjang S1 yang resmi dibuka oleh UIN Jakarta.,10,10,5,5,10.0
+2,Factual,Apa saja materi ujian pada seleksi SPMB Mandiri Reguler 2026?,10,10,10,10,10.0
+3,Ambiguity,Apa perbedaan antara jalur seleksi SNBT nasional dengan SPMB Mandiri Non-Reguler Nilai SNBT?,9,10,8,7,9.5
+4,Ambiguity,Apakah prodi Pendidikan Agama Islam tersedia di SPMB Mandiri Nilai UM-PTKIN?,10,10,10,10,10.0
+5,Reasoning,Sebutkan 3 program studi di Fakultas Ilmu Tarbiyah dan Keguruan yang bisa dipilih pada ujian Daring (Online) SPMB Mandiri Reguler!,10,10,10,10,10.0
+6,No Context,Berapa passing grade nilai rapor untuk masuk prodi Kedokteran melalui jalur Mandiri?,8,7,6,5,7.5
+7,No Context,"Sebutkan daftar prodi, biaya, dan syarat pendaftaran untuk Jalur Internasional UIN Jakarta.",2,2,3,1,2.0

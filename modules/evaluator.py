@@ -1,42 +1,63 @@
+import os
 import json
-import re
-from langchain_groq import ChatGroq
+from azure.ai.inference import ChatCompletionsClient
+from azure.core.credentials import AzureKeyCredential
 
 class RAGEvaluator:
     def __init__(self):
-        # Menggunakan Llama 3.3 70B sebagai Auditor karena akurasi penalarannya tinggi
-        self.auditor = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+        self.token = os.getenv("GITHUB_TOKEN")
+        self.endpoint = "https://models.inference.ai.azure.com"
+        self.client = ChatCompletionsClient(
+            endpoint=self.endpoint,
+            credential=AzureKeyCredential(self.token)
+        )
+        self.model_name = "gpt-4o-mini" 
 
     async def evaluate_answer(self, query, answer, context):
-        eval_system = """Tugas: Kamu adalah auditor ahli UIN Jakarta. 
-Bandingkan JAWABAN dengan DATA KONTEKS untuk menilai akurasi dan integritas.
+        system_prompt = """Kamu adalah auditor RAGAS (RAG Assessment) tingkat ahli.
+Tugasmu adalah menilai jawaban berdasarkan DATA KONTEKS dan PERTANYAAN.
 
-Aturan Penilaian:
-1. Skor 10 (Sempurna): Jawaban akurat sesuai data KONTEKS, ATAU jawaban jujur menyatakan "Data tidak ditemukan" jika informasi memang benar-benar tidak ada di KONTEKS.
-2. Skor 8-9 (Sangat Baik): Jawaban benar tapi kurang lengkap sedikit, atau memberikan saran yang relevan meski data spesifik tidak ada.
-3. Skor 5 (Risiko): Ada kesalahan angka, data tertukar antara prodi/jenjang, atau menggunakan data tahun yang salah dari KONTEKS.
-4. Skor 1 (Gagal): HALUSINASI (mengarang angka/informasi yang tidak ada di KONTEKS) atau menjawab "tidak ada" padahal datanya jelas-jelas tersedia di KONTEKS.
+Berikan output JSON mentah dengan struktur wajib berikut:
+{
+  "faithfulness": <1-10>,
+  "answer_relevance": <1-10>,
+  "context_precision": <1-10>,
+  "context_recall": <1-10>,
+  "reason": "<penjelasan_singkat_mengapa_skor_tersebut_diberikan>"
+}
 
-Output WAJIB JSON: {"score": 1-10, "reason": "penjelasan singkat"}"""
+Definisi Metrik:
+- Faithfulness: Apakah jawaban didukung fakta di konteks? (Cegah halusinasi)
+- Answer Relevance: Apakah jawaban menjawab inti pertanyaan?
+- Context Precision: Apakah dokumen yang diambil (di konteks) relevan?
+- Context Recall: Apakah dokumen yang diambil lengkap untuk menjawab pertanyaan?
 
-        user_content = (
-            f"PERTANYAAN USER: {query}\n\n"
-            f"JAWABAN MODEL: {answer}\n\n"
-            f"DATA KONTEKS (Referensimu): \n{context}"
-        )
-        
+ATURAN PENILAIAN KHUSUS (WAJIB DIIKUTI):
+Jika kueri berada di luar cakupan basis pengetahuan atau tidak memiliki jawaban di dalam konteks, dan model menjawab dengan penolakan sopan (seperti: 'Mohon maaf, informasi tersebut tidak tersedia di database kami'), MAKA berikan skor 10 (sempurna) untuk Faithfulness dan Answer Relevance. Kejujuran model dalam mengakui ketidaktahuan adalah perilaku yang diinginkan, bukan kegagalan."""
+
+        user_content = f"PERTANYAAN: {query}\n\nJAWABAN SISTEM: {answer}\n\nDATA KONTEKS:\n{context}"
+
         try:
-            res = (await self.auditor.ainvoke([
-                {"role": "system", "content": eval_system},
-                {"role": "user", "content": user_content}
-            ])).content
+            response = self.client.complete(
+                stream=False,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                model=self.model_name,
+                temperature=0.0
+            )
             
-            # Parsing JSON dari response
-            match = re.search(r'\{.*\}', res, re.DOTALL)
-            if match:
-                result = json.loads(match.group())
-                return result
-            else:
-                return {"score": 0, "reason": "Gagal parsing output AI"}
+            res_text = response.choices[0].message.content
+            # Bersihkan format markdown
+            if "```json" in res_text: res_text = res_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in res_text: res_text = res_text.split("```")[1].strip()
+            
+            return json.loads(res_text)
+            
         except Exception as e:
-            return {"score": 0, "reason": f"Evaluator Error: {str(e)}"}     
+            return {
+                "faithfulness": 0, "answer_relevance": 0, 
+                "context_precision": 0, "context_recall": 0, 
+                "reason": f"Audit Error: {str(e)}"
+            }
