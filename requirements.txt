@@ -1,7 +1,4 @@
-# UI & Framework
-chainlit
-python-dotenv
-chainlit
+# UI
 streamlit
 
 # LLM & Orchestration
@@ -10,15 +7,20 @@ langchain-groq
 langchain-community
 langchain-huggingface
 
-# Vector Database & Retrieval
-langchain-pinecone
-pypdf
+# Azure AI Inference (WAJIB untuk rag_azure.py)
+azure-ai-inference
+azure-core
 
-# Data Processing (Sangat krusial untuk kestabilan Chainlit)
+# Vector Database
+langchain-pinecone
+pinecone-client
+
+# Data Processing
 pandas>=2.0.0
 pyarrow>=12.0.0
+pypdf
 
-# Optional: Jika kamu masih butuh pencarian web luar
-langchain-tavily
-pinecone
-langchain-huggingface
+# Utils
+python-dotenv
+httpx
+plotly
