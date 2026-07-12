@@ -13,7 +13,7 @@ azure-core
 
 # Vector Database
 langchain-pinecone
-pinecone-client
+pinecone
 
 # Data Processing
 pandas>=2.0.0
