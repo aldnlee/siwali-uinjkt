@@ -11,7 +11,7 @@ from langchain_core.documents import Document
 
 # Import Modul Internal
 from modules.database import get_vectorstore
-from modules.rag_azure import advanced_rag_chat
+from modules.rag_engine import advanced_rag_chat
 
 # =========================
 # CONFIG & PATH SETTINGS
@@ -273,35 +273,35 @@ else:
                 except Exception as e: 
                     st.error(f"Gagal Push ke Pinecone: {e}")
 
-        st.divider()
-        st.subheader("🗑️ Kelola/Hapus Data Pinecone")
-        
-        # Logika menghapus data berdasarkan pilihan dropdown
-        if os.path.exists(LOG_FILE):
-            df_log = pd.read_csv(LOG_FILE)
-            if not df_log.empty:
-                file_list = df_log['File'].unique().tolist()
-                selected_file = st.selectbox("Pilih file yang ingin dihapus dari Pinecone:", file_list)
-                
-                if st.button(f"Hapus permanen file: {selected_file}"):
-                    with st.spinner(f"Menghapus {selected_file} dari Pinecone..."):
-                        try:
-                            # Hapus dari Pinecone
-                            vs = get_vectorstore()
-                            vs.delete(filter={"SOURCE": selected_file})
-                            
-                            # Hapus record dari file log (riwayat_upload.csv)
-                            df_log = df_log[df_log['File'] != selected_file]
-                            df_log.to_csv(LOG_FILE, index=False)
-                            
-                            st.success(f"Data {selected_file} berhasil dihapus!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Gagal menghapus: {e}")
+            st.divider()
+            st.subheader("🗑️ Kelola/Hapus Data Pinecone")
+            
+            # Logika menghapus data berdasarkan pilihan dropdown
+            if os.path.exists(LOG_FILE):
+                df_log = pd.read_csv(LOG_FILE)
+                if not df_log.empty:
+                    file_list = df_log['File'].unique().tolist()
+                    selected_file = st.selectbox("Pilih file yang ingin dihapus dari Pinecone:", file_list)
+                    
+                    if st.button(f"Hapus permanen file: {selected_file}"):
+                        with st.spinner(f"Menghapus {selected_file} dari Pinecone..."):
+                            try:
+                                # Hapus dari Pinecone
+                                vs = get_vectorstore()
+                                vs.delete(filter={"SOURCE": selected_file})
+                                
+                                # Hapus record dari file log (riwayat_upload.csv)
+                                df_log = df_log[df_log['File'] != selected_file]
+                                df_log.to_csv(LOG_FILE, index=False)
+                                
+                                st.success(f"Data {selected_file} berhasil dihapus!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Gagal menghapus: {e}")
+                else:
+                    st.info("Riwayat upload kosong.")
             else:
-                st.info("Riwayat upload kosong.")
-        else:
-            st.info("Belum ada riwayat upload file.")
+                st.info("Belum ada riwayat upload file.")
 
     with t_log:
         if os.path.exists(LOG_FILE):
